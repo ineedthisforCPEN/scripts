@@ -1,6 +1,7 @@
 #!/usr/bin/sh
 #
-# progress_bar <current> <max> <blocks>
+# Usage:
+#   progress_bar <current> <max> <blocks>
 #
 # Creates a progress bar that is <blocks> characters wide. The length
 # of the progress bar corresponds to the fraction <current>/<max>. This
