@@ -1,0 +1,48 @@
+#!/usr/bin/sh
+#
+# progress_bar <current> <max> <blocks>
+#
+# Creates a progress bar that is <blocks> characters wide. The length
+# of the progress bar corresponds to the fraction <current>/<max>. This
+# script does NOT print a trailing newline character.
+#
+# Default values are:
+#   current = 0
+#   max     = 100
+#   blocks  = 4
+# 
+# Examples:
+#   > progress_bar          -> "    "
+#   > progress_bar 50       -> "██  "
+#   > progress_bar 50 200   -> "█   "
+#   > progress_bar 50 200 8 -> "██      "
+#
+
+# Base values
+current=0
+max=100
+blocks=4
+
+# Read parameters and modify as required
+[ "$#" -ge 1 ] && current=$1
+[ "$#" -ge 2 ] && max=$2
+[ "$#" -ge 3 ] && blocks=$3
+[ $current -gt $max ] && $current=$max
+
+fraction=$(((100 * current * blocks) / max))
+for i in $(seq 1 $blocks);
+do
+    if [ "$fraction" -ge 100 ]; then
+        echo -n "█"
+    elif [ "$fraction" -ge 75 ]; then
+        echo -n "▊"
+    elif [ "$fraction" -ge 50 ]; then
+        echo -n "▌"
+    elif [ "$fraction" -ge 25 ]; then
+        echo -n "▎"
+    else
+        echo -n " "
+    fi
+
+    fraction=$((fraction - 100))
+done
