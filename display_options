@@ -1,0 +1,256 @@
+#!/usr/bin/bash
+#
+# Usage:
+#   toggle_display
+#
+# A dmenu-base interface that performs base xrandr actions including
+# turning displays on/off, rotating displays, reflecting displays,
+# etc...
+#
+# Required Programs:
+#   display_modes   (SCRIPT)
+#   dmenu
+#   xrandr
+#
+
+# Get display information
+displays_all=$(xrandr | grep " connected" | awk '{ print $1 }')
+displays_primary=$(echo "$displays_all" | grep "primary" | awk '{ print $1 }')
+displays_connected=$(echo "$displays_all" | grep -v "primary" | awk '{ print $1 }')
+
+displays_active=$(xrandr --listmonitors | tail -n +2 | awk '{ print $NF }')
+displays_inactive=$(
+    for display in $displays_connected;
+    do
+        [[ "$displays_active" != *"$display"* ]] && echo "$display"
+    done
+)
+
+
+get_location () {
+    [[ "$#" -lt 2 ]] && echo "" && return
+
+    display=$1
+    reference=$2
+
+    location=$(
+        echo "$(
+            echo "To the RIGHT of $reference"
+            echo "To the LEFT of $reference"
+            echo "ABOVE $reference"
+            echo "BELOW $reference"
+            echo "DUPLICATE $reference"
+        )" |
+        dmenu -i -p "Place $display"
+    )
+    case $location in
+        *RIGHT*)
+            echo "--right-of"
+            ;;
+        *LEFT*)
+            echo "--left-of"
+            ;;
+        *ABOVE*)
+            echo "--above"
+            ;;
+        *BELOW*)
+            echo "--below"
+            ;;
+        *DUPLICATE*)
+            echo "--same-as"
+            ;;
+        *)
+            echo ""
+            ;;
+    esac
+}
+
+
+get_resolution () {
+    [[ "$#" -eq 0 ]] && return
+    display=$1
+
+    ~/scripts/display_modes $display |
+        dmenu -i -p "Select resolution for $display"
+}
+
+
+display_change () {
+    # Check if there are any other displays available
+    [[ -z $displays_connected ]] \
+        && echo "OK" | dmenu -p "No other displays found" \
+        && return
+
+    # Select which display to use
+    displays=$(
+        for d in $displays_primary; do echo "* $d"; done
+        for d in $displays_connected; do echo "$d"; done
+    )
+    display=$(
+        echo "$displays" |
+        dmenu -i -p "Select Display" |
+        awk '{ print $NF }'
+    )
+    [[ -z $display ]] && return
+
+    # Select display resolution
+    resolution=$(get_resolution $display)
+    [[ -z $resolution ]] && return
+
+    # First, enable the display we intend to turn on
+    xrandr --auto --output $display --mode $resolution
+
+    # Then disable all other active displays
+    for d in $displays_active;
+    do
+        [[ "$d" != "$display" ]] && xrandr --output $d --off
+    done
+}
+
+
+display_extend () {
+    # First, make sure that there are xrandr outputs that are currently not
+    # active that can be used as an extended monitor
+    [[ -z $displays_inactive ]] && return
+
+    # We have outputs available for extension. Select which currently active
+    # display to extend
+    display=$(
+        echo "$displays_active" |
+        dmenu -i -p "Select display to extend"
+    )
+    [[ -z $display ]] && return
+
+    # Select where to extend the display 
+    extend=$(
+        echo "$displays_inactive" |
+        dmenu -i -p "Select output for extended $display"
+    )
+    [[ -z $extend ]] && return
+
+    # Select extended monitor's resolution
+    resolution=$(get_resolution $extend)
+    [[ -z $resolution ]] && return
+
+    # Finally, find location of extended display relative to our selected
+    # display
+    location=$(get_location $extend $display)
+    [[ -z $location ]] && return
+
+    # Extend the display
+    xrandr --auto --output $extend --mode $resolution $location $display
+}
+
+
+display_modify () {
+    # Select a display to modify
+    display=$(
+        echo "$displays_active" |
+        dmenu -i -p "Select monitor to modify"
+    )
+    [[ -z $display ]] && return
+
+    # Select modification action
+    modifier=$(
+        echo "$(
+            echo "Disable"
+            echo "Rotate"
+            echo "Reflect"
+            echo "Move"
+            echo "Set Primary"
+            echo "Set Resolution"
+        )" |
+        dmenu -i -p "Display action"
+    )
+    case $modifier in
+        "Disable")
+            if [[ "$(echo "$displays_active" | wc -l)" -gt 1 ]]; then
+                # Only disable the display if there is more than one active
+                # display
+                xrandr --output $display --off
+            fi
+            ;;
+
+        "Rotate")
+            rotation=$(
+                echo -e "🞁\n🞀\n🞂\n🞃" |
+                dmenu -i -p "Select rotation direction (arrow will be upright)"
+            )
+            rot=""
+            [[ "$rotation" = "🞁" ]] && rot="normal"
+            [[ "$rotation" = "🞀" ]] && rot="left"
+            [[ "$rotation" = "🞂" ]] && rot="right"
+            [[ "$rotation" = "🞃" ]] && rot="inverted"
+            [[ -z "$rot" ]] && return
+
+            xrandr --output $display --rotate $rot
+            ;;
+
+        "Reflect")
+            reflection=$(
+                echo -e "Normal\nX Axis\nY Axis\nX and Y Axis" |
+                dmenu -i -p "Select reflection access"
+            )
+            refl=""
+            [[ "$reflection" = "Normal" ]] && refl="normal"
+            [[ "$reflection" = "X Axis" ]] && refl="x"
+            [[ "$reflection" = "Y Axis" ]] && refl="y"
+            [[ "$reflection" = "X and Y Axis" ]] && refl="xy"
+            [[ -z "$refl" ]] && return
+
+            xrandr --output $display --reflect $refl
+            ;;
+
+        "Move")
+            reference=$(
+                echo "$displays_active" |
+                dmenu -i -p "Select reference display"
+            )
+            [[ -z "$reference" ]] && return
+            [[ "$reference" = "$display" ]] && return
+
+            location=$(get_location $display $reference)
+            [[ -z $location ]] && return
+
+            resolution=$(get_resolution $display)
+            [[ -z $resolution ]] && return
+
+            xrandr --output $display --mode $resolution $location $reference
+            ;;
+
+        "Set Primary")
+            xrandr --output $display --primary
+            ;;
+
+        "Set Resolution")
+            resolution=$(get_resolution $display)
+            [[ -z $resolution ]] && return
+
+            xrandr --output $display --mode $resolution
+            ;;
+
+        *)
+            return
+            ;;
+    esac
+}
+
+
+actions="Change Display\nExtend Display\nModify Display"
+action=$(
+    echo -e $actions |
+    dmenu -i -p "Display Action"
+)
+
+
+case $action in
+    "Change Display")
+        display_change
+        ;;
+    "Extend Display")
+        display_extend
+        ;;
+    "Modify Display")
+        display_modify
+        ;;
+esac
