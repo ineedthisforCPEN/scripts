@@ -1,0 +1,62 @@
+#!/usr/bin/python
+#
+# Usage:
+#   display_modes <display>
+#
+# List all display resolutions available for a given display name. Each
+# resolution is dislayed on a new line. The display name is expected to
+# be a display name recognized by xrandr (e.g. HMDI-1).
+#
+# Examples:
+#   display_modes HDMI-1 -> 1920x1080 1600x900 ...
+#   display_modes VGA-1  -> 800x600 720x480 ...
+#
+# Required Programs:
+#   xrandr
+#
+
+import subprocess
+import sys
+
+
+def get_modes(monitor):
+    """Get all available monitor resolutions.
+
+    Parameters:
+        monitor     Name of monitor to query
+
+    Return:
+        String of all resolutions available of given monitor
+        separated by newlines.
+    """
+    # Get
+    try:
+        p = subprocess.Popen(["xrandr", "-q"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL)
+    except:
+        return
+
+    xrandr = [line.decode("utf-8") for line in p.stdout.read().splitlines()]
+    monitor_index = -1
+
+    # Find out where monitor information starts
+    for i, line in enumerate(xrandr):
+        if line.startswith(monitor):
+            monitor_index = i + 1
+            break
+
+    # Print all resolutions for the given monitor
+    for line in xrandr[monitor_index:]:
+        if not line.startswith(" "):
+            break
+        print(line.split()[0])
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("Incorrect usage")
+        print("Usage: display_modes <display>")
+        sys.exit(-1)
+
+    get_modes(sys.argv[1])
