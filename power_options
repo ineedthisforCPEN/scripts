@@ -1,0 +1,45 @@
+#!/usr/bin/sh
+#
+# Usage:
+#   power_options
+#
+# Opens up a dmenu prompt that provides multiple power options
+# including "lock", "reboot", "shutdown".
+#
+# Required Programs:
+#   betterlockscreen    (AUR)
+#   dmenu
+#
+
+options="Lock
+Logout
+Suspend
+Reboot
+Shutdown"
+
+selected=$(
+    echo "$options" |
+    dmenu -i -l $(echo "$options" | wc -l) -p "Power Options" |
+    tr "[:upper:]" "[:lower:]"
+)
+
+case $selected in
+    lock)
+        betterlockscreen -l blur
+        ;;
+    logout)
+        pkill -u $USER
+        ;;
+    suspend)
+        betterlockscreen -l blur &
+        systemctl suspend
+        ;;
+    reboot)
+        sudo shutdown -r now
+        ;;
+    shutdown)
+        sudo shutdown -P now
+        ;;
+    *)
+        ;;
+esac
